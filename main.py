@@ -5,7 +5,6 @@ import random
 import re
 import string
 import sys
-import threading
 import time
 
 import discord
@@ -227,8 +226,8 @@ class FishBot(discord.Client):
 
         self.current_channel = random.choice(self.parsed_channels)
         logger.warning(f"Switched to {self.current_channel.name} in {self.current_channel.guild.name}")
-        logger.info("Fetching info...")
         self.locked = False
+        await self.fish_commands[self.current_channel.guild.id][self.current_channel.id]()
         await self.check_activity.start()
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -274,17 +273,6 @@ class FishBot(discord.Client):
 
     async def handle_embeds(self, message: discord.Message):
         for embed in message.embeds:
-            if embed.title:
-                if "Inventory" in embed.title and self.level == -1:
-                    match = re.search(r'\*\*Level (\d+)\*\*', embed.description)
-                    if match:
-                        self.level = int(match.group(1))
-                    for component in message.components:
-                        if isinstance(component, discord.ActionRow):
-                            for child in component.children:
-                                if child.custom_id == "shop":
-                                    self.locked = True
-                                    await perform_delayed_click(child)
             if "Requirements:" in embed.description and self.locked and self.running:
                 logger.info("Can't prestige yet (not matching requirements)")
                 self.locked = False
@@ -305,6 +293,10 @@ class FishBot(discord.Client):
                     logger.warning("Trying to prestige...")
                     self.locked = True
                     await self.prestige_commands[self.current_channel.guild.id][self.current_channel.id]()
+                if self.fish_counter.get() >= random.randrange(220, 310):
+                    self.locked = True
+                    await asyncio.sleep(random.uniform(120, 512))
+                    restart()
                 if self.fish_counter.get() >= random.randrange(self.move_rate[0], self.move_rate[1]):
                     self.locked = True
                     while True:
@@ -331,13 +323,6 @@ class FishBot(discord.Client):
                     await self.verify_commands[self.current_channel.guild.id][self.current_channel.id](answer="regen")
                 if "**/verify** with this code" in embed.description:
                     self.locked = True
-                    diff = (time.time() - self.latest_captcha) / 60
-                    if diff >= 29:
-                        wait_time = get_random_cooldown(60000 * (random.randint(20, 49)))
-                        logger.warning(f"Got sus by mods. Waiting {wait_time} ms")
-                        await asyncio.sleep(wait_time)
-                        restart()
-                    self.latest_captcha = time.time()
                     await self.solve_captcha(embed)
                 if "You are now level" in embed.description:
                     await self.handle_level_up(embed)
